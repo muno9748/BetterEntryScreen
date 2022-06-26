@@ -74,7 +74,7 @@ window.EntryScreenFixer = class EntryScreenFixer {
                             if(obj.entity.picture.imageType == 'svg') {
                                 const viewBox = svgImages.get(obj.getPictureIndex())?.[1]
 
-                                if(!viewBox) return flase
+                                if(!viewBox) return false
 
                                 const [ _x, _y, vw, vh ] = viewBox
 
