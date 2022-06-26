@@ -1,10 +1,12 @@
-class EntryScreenFixer {
+window.EntryScreenFixer = class EntryScreenFixer {
     static Marker = Symbol('EntryScreenFixer')
     
     constructor() {
         this.Entry = document.querySelector('iframe')?.contentWindow?.Entry
       
         if(!this.Entry) throw new Error('이 스크립트는 만들기 화면에서는 동작하지 않습니다.')
+
+        this.canvas = this.Entry.stage.canvas.canvas
     }
   
     ratioX = 0
@@ -59,6 +61,12 @@ class EntryScreenFixer {
             Object.defineProperty(obj.entity.object, 'draw', {
                 get() {
                     return ctx => {
+                        if(ctx.canvas != scrFixer.canvas) {
+                            ctx.drawImage(img, 0, 0)
+                            
+                            return
+                        }
+                        
                         const w = obj.entity.getWidth()
                         const h = obj.entity.getHeight()
 
