@@ -33,7 +33,7 @@ class EntryScreenFixer {
 
         Entry.container.objects_.forEach(obj => {
             if(obj.esf_marker == EntryScreenFixer.Marker) return
-            
+            if(obj.objectType != 'sprite') return
 
             obj.esf_marker = EntryScreenFixer.Marker
 
