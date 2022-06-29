@@ -47,7 +47,7 @@ window.EntryScreenFixer = class EntryScreenFixer {
                     const image = new Image()
 
                     image.src = `https://playentry.org/uploads/${id.slice(0, 2)}/${id.slice(2, 4)}/image/${id}.svg`
-                    
+
                     svgImages.set(idx, [image, null])
 
                     fetch(image.src).then(resp => resp.text()).then(resp => (new DOMParser().parseFromString(resp, 'image/svg+xml'))).then(doc => {
@@ -74,7 +74,11 @@ window.EntryScreenFixer = class EntryScreenFixer {
 
                         if((() => {
                             if(obj.entity.picture.imageType == 'svg') {
-                                const viewBox = svgImages.get(obj.getPictureIndex())?.[1]
+                                const image = svgImages.get(obj.pictures.indexOf(obj.entity.picture))
+
+                                if(!image) throw new ReferenceError('[EntryScreenFixer] Unindexed SVG Item: ' + obj.getPictureIndex())
+
+                                const viewBox = image[1]
 
                                 if(!viewBox) return false
 
@@ -104,38 +108,27 @@ window.EntryScreenFixer = class EntryScreenFixer {
                                     ctx.rotate(rot)
                                     ctx.translate(-regX, -regY)
 
-                                    ctx.drawImage(obj.entity.object.image, 0, 0, vw, vh)
+                                    ctx.drawImage(image[0], 0, 0, vw, vh)
 
                                     return true
-                                } else {
-                                    return false
                                 }
                             }
                         })()) return
                         
-                        ctx.drawImage(obj.entity.object.image, 0, 0, w, h)
+                        if(obj.entity.picture.imageType == 'svg') {
+                            const image = svgImages.get(obj.pictures.indexOf(obj.entity.picture))
+
+                            if(!image) throw new ReferenceError('[EntryScreenFixer] Unindexed SVG Item: ' + obj.getPictureIndex())
+
+                            ctx.drawImage(image[0], 0, 0, w, h)
+                        } else {
+                            ctx.drawImage(obj.entity.object.image, 0, 0, w, h)
+                        }
                     }
                 }
             })
 
             let img = obj.entity.object.image
-
-            Object.defineProperty(obj.entity.object, 'image', {
-                get() {
-                    if (obj.entity.picture.imageType == 'svg') {
-                        const svg = svgImages.get(obj.pictures.indexOf(obj.entity.picture))
-
-                        if(!svg) throw new ReferenceError('[EntryScreenFixer] Unindexed SVG Item: ' + obj.getPictureIndex())
-
-                        return svg[0]
-                    } else {
-                        return img
-                    }
-                },
-                set(value) {
-                    img = value
-                }
-            })
 
             const objectProxy = new Proxy(obj.entity.object, {
                 get(target, key, receiver) {
