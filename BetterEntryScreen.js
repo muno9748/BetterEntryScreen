@@ -52,8 +52,8 @@ window.EntryScreenFixer = class EntryScreenFixer {
 
                     fetch(image.src).then(resp => resp.text()).then(resp => (new DOMParser().parseFromString(resp, 'image/svg+xml'))).then(doc => {
                         const svg = [...doc.childNodes].find(x => x.tagName == 'svg')
-                        const vbox = svg.getAttribute('viewBox')?.split?.(' ')?.map?.(x => +x)
-                        svgImages.set(idx, [svgImages.get(idx)[0], vbox && vbox[2] != 0 && vbox[3] != 0 ? vbox : [0, 0, svg.width.baseVal.value, svg.height.baseVal.value]])
+                        const vbox = [svg.viewBox.baseVal.x, svg.viewBox.baseVal.y, svg.viewBox.baseVal.width, svg.viewBox.baseVal.height]
+                        svgImages.set(idx, [svgImages.get(idx)[0], vbox[2] != 0 && vbox[3] != 0 ? vbox : [0, 0, svg.width.baseVal.value, svg.height.baseVal.value]])
                     })
 
                     entries++
