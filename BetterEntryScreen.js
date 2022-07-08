@@ -1,3 +1,333 @@
+window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
+    static SVGMarker = Symbol('SVGMarker')
+
+    constructor(parent, Entry) {
+        this.parent = parent
+        this.Entry = Entry
+    }
+  
+    ratioX = 0
+    ratioY = 0
+
+    fixEntity(objMap, ett) {
+        const Entry = this.Entry
+        const originSetImage = ett.setImage.bind(ett)
+
+        ett.setImage = pictureModel => {
+            const idx = ett.parent.pictures.indexOf(pictureModel)
+
+            if(objMap.has(idx)) {
+                const data = objMap.get(idx)
+
+                delete pictureModel._id
+                Entry.assert(ett.type == 'sprite', 'Set image is only for sprite object')
+            
+                if (!pictureModel.id) pictureModel.id = Entry.generateHash()
+            
+                ett.picture = pictureModel
+
+                const entityWidth = ett.getWidth()
+                const entityHeight = ett.getHeight()
+                const absoluteRegX = ett.getRegX() - entityWidth / 2
+                const absoluteRegY = ett.getRegY() - entityHeight / 2
+
+                ett.object.texture = data.texture
+                ett.setScaleX(data.scaleX)
+                ett.setScaleY(data.scaleY)
+                ett.setRegX(data.regX + absoluteRegX)
+                ett.setRegY(data.regY + absoluteRegY)
+                ett.setWidth(data.regX * 2)
+                ett.setHeight(data.regY * 2)
+
+                ett._scaleAdaptor.updateScaleFactor()
+        
+                ett.object.refreshFilter()
+            
+                Entry.dispatchEvent('updateObject')
+            } else {
+                originSetImage(pictureModel)
+            }
+        }
+
+        ett.setImage(ett.picture)
+    }
+
+    fixEntries() {
+        const { Entry } = this
+
+        let entries = 0
+        let pngEntries = 0
+
+        Entry.container.objects_.forEach(obj => {
+            if(obj.esf_marker == EntryScreenFixer.Marker) return
+            if(obj.objectType != 'sprite') return
+            
+            const objMap = new Map()
+
+            obj.esf_marker = EntryScreenFixer.Marker
+
+            const originalImage = obj.entity.picture
+
+            obj.pictures.forEach((pic, idx) => {
+                if(pic.imageType == 'svg' && !pic.fileurl) {
+                    obj.entity.setImage(pic)
+
+                    const id = pic.filename
+                    const src = `https://playentry.org/uploads/${id.slice(0, 2)}/${id.slice(2, 4)}/image/${id}.svg`
+                    const texture = obj.entity.object.texture.constructor.from(src)
+
+                    const sx = obj.entity.object.scale.x
+                    const sy = obj.entity.object.scale.y
+                    const w = obj.entity.object.texture.width
+                    const h = obj.entity.object.texture.height
+
+                    texture.baseTexture.resource.load().then(() => {
+                        texture.textureScaleFactorX = 1
+                        texture.textureScaleFactorY = 1
+
+                        objMap.set(idx, {
+                            texture,
+                            regX: texture.width / 2,
+                            regY: texture.height / 2,
+                            scaleX: sx / (texture.width / w),
+                            scaleY: sy / (texture.height / h)
+                        })
+                    })
+                    
+                    entries++
+                } else if (pic.imageType == 'png' && !pic.fileurl) {
+                    obj.entity.setImage(pic)
+
+                    const id = pic.filename
+                    const src = `https://playentry.org/uploads/${id.slice(0, 2)}/${id.slice(2, 4)}/image/${id}.png`
+                    const texture = obj.entity.object.texture.constructor.from(src)
+
+                    const sx = obj.entity.object.scale.x
+                    const sy = obj.entity.object.scale.y
+                    const w = obj.entity.object.texture.width
+                    const h = obj.entity.object.texture.height
+
+                    texture.baseTexture.resource.load().then(() => {
+                        texture.textureScaleFactorX = 1
+                        texture.textureScaleFactorY = 1
+
+                        objMap.set(idx, {
+                            texture,
+                            regX: texture.width / 2,
+                            regY: texture.height / 2,
+                            scaleX: sx / (texture.width / w),
+                            scaleY: sy / (texture.height / h)
+                        })
+                    })
+
+                    pngEntries++
+                }
+            })
+
+            obj.entity.setImage(originalImage)
+
+            this.fixEntity(objMap, obj.entity)
+    
+            obj.addCloneEntity = (_object, entity, _script) => {
+                if (obj.clonedEntities.length > Entry.maxCloneLimit) return
+        
+                const clonedEntity = new Entry.EntityObject(obj)
+                
+                clonedEntity.isClone = true
+
+                entity = entity || obj.entity
+                
+                clonedEntity.injectModel(entity.picture || null, entity.toJSON())
+                clonedEntity.snapshot_ = entity.snapshot_
+        
+                if (entity.effect) {
+                    clonedEntity.effect = _.clone(entity.effect)
+                    clonedEntity.applyFilter()
+                }
+        
+                Entry.engine.raiseEventOnEntity(clonedEntity, [clonedEntity, 'when_clone_start'])
+
+                clonedEntity.isStarted = true
+
+                obj.addCloneVariables(obj, clonedEntity, entity ? entity.variables : null, entity ? entity.lists : null)
+                obj.clonedEntities.push(clonedEntity)
+
+                let targetIndex = Entry.stage.selectedObjectContainer.getChildIndex(entity.object)
+                targetIndex -= (entity.shapes.length ? 1 : 0) + entity.stamps.length
+
+                Entry.stage.loadEntity(clonedEntity, targetIndex)
+        
+                if (entity.brush) Entry.setCloneBrush(clonedEntity, entity.brush)
+
+                this.fixEntity(objMap, clonedEntity)
+            }
+        })
+
+        this.parent.info(`Fixed ${entries} SVG Entries and ${pngEntries} Cached Entries`)
+    }
+
+    fix() {
+        const resolution = [Math.ceil(screen.width), Math.ceil(screen.width * 9 / 16)]
+
+        this.parent.info(`Found Device Resolution ${screen.width}x${screen.height}`)
+
+        this.fixEntries()
+
+        this.setScreenResolution(...resolution)
+    }
+
+    setScreenResolution(w, h) {
+        this.parent.info(`Setting Rendering Resolution to ${w}x${h}`)
+
+        const { Entry } = this
+        const { stage } = Entry
+    
+        stage.canvas.canvas.width = w
+        stage.canvas.canvas.height = h
+        stage.canvas.x = w / 2
+        stage.canvas.y = h / 2
+        stage.canvas.scaleX = stage.canvas.scaleY = w / 240 / 2
+    
+        stage._app.screen.width = w
+        stage._app.screen.height = h
+
+        this.ratioX = 480 / w
+        this.ratioY = 270 / h
+
+        Entry.requestUpdate = true
+
+        this.fixRatio()
+    }
+
+    fixRatio() {
+        const { Entry } = this
+
+        Entry.variableContainer.lists_.forEach(list => {
+            list.view_.off('__pointerdown')
+            list.view_.off('__pointermove')
+            list.view_.off('__pointerup')
+            list.view_.off('pointerover')
+            list.resizeHandle_.off('__pointerdown')
+            list.resizeHandle_.off('__pointermove')
+            list.resizeHandle_.off('__pointerup')
+            list.resizeHandle_.off('pointerover')
+            list.scrollButton_.off('__pointerdown')
+            list.scrollButton_.off('__pointermove')
+            list.scrollButton_.off('__pointerup')
+            list.scrollButton_.off('pointerover')
+
+            list.view_.on('pointerover', () => list.view_.cursor = 'move')
+            list.view_.on('__pointermove', e => {
+                if (Entry.type != 'workspace' || list.isResizing) return
+
+                list.view_.offset = {
+                    x: list.view_.x - (e.stageX * this.ratioX - 240),
+                    y: list.view_.y - (e.stageY * this.ratioY - 135)
+                }
+
+                list.view_.cursor = 'move'
+            })
+            list.view_.on('__pointerdown', () => {
+                list.view_.cursor = 'initial'
+                list.isResizing = false
+            })
+            list.view_.on('__pointerup', e => {
+                if (Entry.type != 'workspace' || list.isResizing) return
+
+                list.setX(e.stageX * this.ratioX - 240 + list.view_.offset.x)
+                list.setY(e.stageY * this.ratioY - 135 + list.view_.offset.y)
+                list.updateView()
+            })
+
+            list.resizeHandle_.on('pointerover', () => list.resizeHandle_.cursor = 'nwse-resize')
+            list.resizeHandle_.on('__pointermove', e => {
+                list.isResizing = true
+            
+                list.resizeHandle_.offset = {
+                    x: e.stageX * this.ratioX - list.getWidth(),
+                    y: e.stageY * this.ratioY - list.getHeight()
+                }
+
+                list.view_.cursor = 'nwse-resize'
+            })
+            list.resizeHandle_.on('__pointerup', e => {
+                list.setWidth(e.stageX * this.ratioX - list.resizeHandle_.offset.x)
+                list.setHeight(e.stageY * this.ratioY - list.resizeHandle_.offset.y)
+                list.updateView()
+            })
+
+            list.scrollButton_.on('__pointermove', e => {
+                list.isResizing = true
+                list.scrollButton_.offsetY = e.stageY - list.scrollButton_.y / this.ratioY
+            })
+            list.scrollButton_.on('__pointerup', e => {
+                list.scrollButton_.y = Math.min(Math.max((e.stageY - list.scrollButton_.offsetY) * this.ratioY, 25), list.getHeight() - 30)
+                list.updateView()
+            })
+        })
+
+        Entry.variableContainer.variables_.forEach(v => {
+            v.view_.off('__pointerdown')
+            v.view_.off('__pointermove')
+            v.view_.off('__pointerup')
+            v.view_.off('pointerover')
+
+            v.view_.on('__pointermove', e => {
+                if (Entry.type != 'workspace') return
+
+                v.view_.offset = {
+                    x: v.view_.x - (e.stageX * this.ratioX - 240),
+                    y: v.view_.y - (e.stageY * this.ratioY - 135)
+                }
+            })
+
+            v.view_.on('__pointerup', e => {
+                if (Entry.type != 'workspace') return
+
+                v.setX(e.stageX * this.ratioX - 240 + v.view_.offset.x)
+                v.setY(e.stageY * this.ratioY - 135 + v.view_.offset.y)
+                v.updateView()
+            })
+
+            if(!v.slideBar_) return
+
+            v.slideBar_.off('__pointerdown')
+            v.slideBar_.off('__pointermove')
+            v.slideBar_.off('__pointerup')
+            v.slideBar_.off('pointerover')
+            v.valueSetter_.off('__pointerdown')
+            v.valueSetter_.off('__pointermove')
+            v.valueSetter_.off('__pointerup')
+            v.valueSetter_.off('pointerover')
+            
+            v.slideBar_.on('__pointermove', e => {
+                if (!Entry.engine.isState('run')) return
+
+                const value = evt.stageX * this.ratioX - (v.slideBar_.getX() + 240 + 5) + 5
+
+                v.setSlideCommandX(value)
+            })
+
+            v.valueSetter_.on('__pointermove', e => {
+                if (!Entry.engine.isState('run')) return
+
+                v.isAdjusting = true
+                v.valueSetter_.offsetX = e.stageX * this.ratioX - v.valueSetter_.x
+            })
+    
+            v.valueSetter_.on('__pointerup', e => {
+                if (!Entry.engine.isState('run')) return
+
+                const value = (e.stageX * this.ratioX) - v.valueSetter_.offsetX + 5
+
+                v.setSlideCommandX(value)
+            })
+
+            v.valueSetter_.on('__pointerdown', () => v.isAdjusting = false)
+        })
+    }
+}
+
 window.EntryScreenFixer = class EntryScreenFixer {
     static Marker = Symbol('EntryScreenFixer')
     
@@ -15,16 +345,21 @@ window.EntryScreenFixer = class EntryScreenFixer {
     resX = 0
     resY = 0
 
+    webGL = null
+
     fix() {
-        if(this.Entry.options.useWebGL) throw new Error('부스트모드는 지원되지 않습니다.')
-
-        const resolution = [Math.ceil(screen.width), Math.ceil(screen.width * 9 / 16)]
-
-        this.info(`Found Device Resolution ${screen.width}x${screen.height}`)
-
-        this.setScreenResolution(...resolution)
-
-        this.fixSVG()
+        if(this.Entry.options.useWebGL) {
+            this.webGL = new EntryScreenFixerWebGL(this, this.Entry)
+            this.webGL.fix()
+        } else {
+            const resolution = [Math.ceil(screen.width), Math.ceil(screen.width * 9 / 16)]
+    
+            this.info(`Found Device Resolution ${screen.width}x${screen.height}`)
+    
+            this.setScreenResolution(...resolution)
+    
+            this.fixSVG()
+        }
     }
 
     fixSVG() {
@@ -129,16 +464,6 @@ window.EntryScreenFixer = class EntryScreenFixer {
             })
 
             let img = obj.entity.object.image
-
-            const objectProxy = new Proxy(obj.entity.object, {
-                get(target, key, receiver) {
-                    if(key == 'draw') {
-                        return 
-                    } else 
-                    
-                    return Reflect.get(target, key, receiver)
-                }
-            })
         })
 
         this.info(`Fixed ${entries} SVG Entries`)
@@ -163,6 +488,12 @@ window.EntryScreenFixer = class EntryScreenFixer {
 
         this.ratioX = 480 / w
         this.ratioY = 270 / h
+
+        this.fixRatio()
+    }
+
+    fixRatio() {
+        const { Entry } = this
 
         Entry.variableContainer.lists_.forEach(list => {
             list.view_.removeAllEventListeners()
