@@ -12,6 +12,11 @@ window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
     fixEntity(objMap, ett) {
         const Entry = this.Entry
         const originSetImage = ett.setImage.bind(ett)
+        const originSetScaleX = ett.setScaleX.bind(ett)
+        const originSetScaleY = ett.setScaleY.bind(ett)
+
+        let sx = ett.scaleX
+        let sy = ett.scaleY
 
         ett.setImage = pictureModel => {
             const idx = ett.parent.pictures.indexOf(pictureModel)
@@ -32,8 +37,8 @@ window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
                 const absoluteRegY = ett.getRegY() - entityHeight / 2
 
                 ett.object.texture = data.texture
-                ett.setScaleX(data.scaleX)
-                ett.setScaleY(data.scaleY)
+                originSetScaleX(sx / data.ratioX)
+                originSetScaleY(sy / data.ratioY)
                 ett.setRegX(data.regX + absoluteRegX)
                 ett.setRegY(data.regY + absoluteRegY)
                 ett.setWidth(data.regX * 2)
@@ -49,6 +54,50 @@ window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
             }
         }
 
+        ett.setScaleX = scaleX => {
+            ett.scaleX = scaleX
+        
+            ett._scaleAdaptor.scale.setX(scaleX)
+    
+            if (ett.textObject) ett.textObject.setFontScaleX(scaleX)
+        
+            ett.parent.updateCoordinateView()
+            ett.updateDialog()
+
+            Entry.requestUpdate = true
+
+            const idx = ett.parent.pictures.indexOf(ett.picture)
+
+            if(objMap.has(idx)) {
+                const data = objMap.get(idx)
+
+                sx = scaleX * data.factorX
+            }
+        }
+
+        ett.setScaleY = scaleY => {
+            ett.scaleY = scaleY
+        
+            ett._scaleAdaptor.scale.setY(scaleY)
+    
+            if (ett.textObject) ett.textObject.setFontScaleY(scaleY)
+        
+            ett.parent.updateCoordinateView()
+            ett.updateDialog()
+
+            Entry.requestUpdate = true
+
+            const idx = ett.parent.pictures.indexOf(ett.picture)
+
+            if(objMap.has(idx)) {
+                const data = objMap.get(idx)
+
+                sy = scaleY * data.factorY
+            }
+        }
+
+        ett.setScaleX(ett.scaleX)
+        ett.setScaleY(ett.scaleY)
         ett.setImage(ett.picture)
     }
 
@@ -76,8 +125,7 @@ window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
                     const src = `https://playentry.org/uploads/${id.slice(0, 2)}/${id.slice(2, 4)}/image/${id}.svg`
                     const texture = obj.entity.object.texture.constructor.from(src)
 
-                    const sx = obj.entity.object.scale.x
-                    const sy = obj.entity.object.scale.y
+                    const t = obj.entity.object.texture
                     const w = obj.entity.object.texture.width
                     const h = obj.entity.object.texture.height
 
@@ -89,8 +137,10 @@ window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
                             texture,
                             regX: texture.width / 2,
                             regY: texture.height / 2,
-                            scaleX: sx / (texture.width / w),
-                            scaleY: sy / (texture.height / h)
+                            ratioX: texture.width / w,
+                            ratioY: texture.height / h,
+                            factorX: t.textureScaleFactorX,
+                            factorY: t.textureScaleFactorY,
                         })
                     })
                     
@@ -102,8 +152,7 @@ window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
                     const src = `https://playentry.org/uploads/${id.slice(0, 2)}/${id.slice(2, 4)}/image/${id}.png`
                     const texture = obj.entity.object.texture.constructor.from(src)
 
-                    const sx = obj.entity.object.scale.x
-                    const sy = obj.entity.object.scale.y
+                    const t = obj.entity.object.texture
                     const w = obj.entity.object.texture.width
                     const h = obj.entity.object.texture.height
 
@@ -115,8 +164,10 @@ window.EntryScreenFixerWebGL = class EntryScreenFixerWebGL {
                             texture,
                             regX: texture.width / 2,
                             regY: texture.height / 2,
-                            scaleX: sx / (texture.width / w),
-                            scaleY: sy / (texture.height / h)
+                            ratioX: texture.width / w,
+                            ratioY: texture.height / h,
+                            factorX: t.textureScaleFactorX,
+                            factorY: t.textureScaleFactorY,
                         })
                     })
 
