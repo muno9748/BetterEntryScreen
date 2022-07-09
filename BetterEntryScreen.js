@@ -411,6 +411,8 @@ window.EntryScreenFixer = class EntryScreenFixer {
     
             this.fixSVG()
         }
+        
+        this.Entry.variableContainer.getVariableByName('.BESEnable')?.setValue?.('1')
     }
 
     fixSVG() {
